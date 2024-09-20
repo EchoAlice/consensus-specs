@@ -218,10 +218,10 @@ def calculate_multi_merkle_root(leaves: Sequence[Bytes32],
                                 indices: Sequence[GeneralizedIndex]) -> Root:
     assert len(leaves) == len(indices)
     helper_indices = get_helper_indices(indices)
-    assert len(proof) == len(helper_indices) + 1  # Remove the "+ 1" once i've figured out why len(proof) != len(indices)
+    assert len(proof) == len(helper_indices)  
     objects = {
         **{index: node for index, node in zip(indices, leaves)},
-        **{index: node for index, node in zip(helper_indices, proof[1:])}  # Remove the "[1:]" once i've figured out why len(proof) != len(indices)
+        **{index: node for index, node in zip(helper_indices, proof)}  
     }
     keys = sorted(objects.keys(), reverse=True)
     pos = 0
@@ -242,4 +242,4 @@ def verify_merkle_multiproof(leaves: Sequence[Bytes32],
                              root: Root) -> bool:
     return calculate_multi_merkle_root(leaves, proof, indices) == root
 
-# Proof Gen Code here.  We need test vector inputs to `verify_merkle_multiproof()`!
+# Proof Gen Code here...  We need test vector inputs to `verify_merkle_multiproof()`!
