@@ -51,12 +51,10 @@ def _run_blob_kzg_commitment_merkle_multiproof_test(spec, state, rng=None):
         "leaf_index": gindex,
         "branch": ['0x' + root.hex() for root in kzg_commitment_inclusion_proof]
     }
-    
     assert verify_merkle_multiproof(
         leaves=[blob_sidecar.kzg_commitment.hash_tree_root()],
         proof=blob_sidecar.kzg_commitment_inclusion_proof,
-        #depth=spec.floorlog2(gindex),
-        indices=[spec.get_subtree_index(gindex)],
+        indices=[gindex],
         root=blob_sidecar.signed_block_header.message.body_root,
     )
 
@@ -72,4 +70,4 @@ def test_blob_kzg_commitment_merkle_multiproof__basic(spec, state):
 
 
 # Step 3:
-# Test to see if `verify_merkle_multiproof()` works as expected.
+# Test to see if `verify_merkle_multiproof()` works as expected...

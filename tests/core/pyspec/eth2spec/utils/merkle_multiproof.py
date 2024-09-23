@@ -2,9 +2,7 @@ from typing import (Sequence, Tuple, Union, Set)
 
 from eth2spec.utils.ssz.ssz_typing import (Bytes32, Container,  ByteList, uint64, List)
 from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName,)
-from remerkleable.tree import Root
-
-# i'm starting to guess
+from remerkleable.tree import Root, merkle_hash as hash
 from remerkleable.byte_arrays import ByteVector as BaseBytes
 from remerkleable.complex import List as BaseList
 
@@ -225,14 +223,17 @@ def calculate_multi_merkle_root(leaves: Sequence[Bytes32],
     }
     keys = sorted(objects.keys(), reverse=True)
     pos = 0
+    
     while pos < len(keys):
         k = keys[pos]
         if k in objects and k ^ 1 in objects and k // 2 not in objects:
             objects[GeneralizedIndex(k // 2)] = hash(
-                objects[GeneralizedIndex((k | 1) ^ 1)] +
+                objects[GeneralizedIndex((k | 1) ^ 1)],
                 objects[GeneralizedIndex(k | 1)]
             )
             keys.append(GeneralizedIndex(k // 2))
+            keys.append(GeneralizedIndex(k // 2))
+            parent = GeneralizedIndex(k // 2)
         pos += 1
     return objects[GeneralizedIndex(1)]
 
