@@ -21,8 +21,7 @@ from eth2spec.debug.random_value import (
     get_random_ssz_object,
 )
 
-# Step 1:  See if `verify_merkle_multiproof()` works with the inputs used within the single merkle proof test
-def _run_blob_kzg_commitment_merkle_multiproof_test(spec, state, rng=None):
+def _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state, rng=None):
     opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=1)
     if rng is None:
         block = build_empty_block_for_next_slot(spec, state)
@@ -58,15 +57,61 @@ def _run_blob_kzg_commitment_merkle_multiproof_test(spec, state, rng=None):
         root=blob_sidecar.signed_block_header.message.body_root,
     )
 
-@with_test_suite_name("BeaconBlockBody")
-@with_deneb_and_later
-@spec_state_test
-def test_blob_kzg_commitment_merkle_multiproof__basic(spec, state):
-    yield from _run_blob_kzg_commitment_merkle_multiproof_test(spec, state)
 
 
 # Step 2:
-# Create a multiproof that two kzg commitments are within the current block.
+# Create a multiproof for two kzg commitments within the current block.
+def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=None):
+    opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=1)
+    if rng is None:
+        block = build_empty_block_for_next_slot(spec, state)
+    else:
+        block = get_random_ssz_object(
+            rng,
+            spec.BeaconBlock,
+            max_bytes_length=2000,
+            max_list_length=2000,
+            mode=RandomizationMode,
+            chaos=True,
+        )
+    block.body.blob_kzg_commitments = blob_kzg_commitments
+    block.body.execution_payload.transactions = [opaque_tx]
+    block.body.execution_payload.block_hash = compute_el_block_hash(spec, block.body.execution_payload, state)
+    signed_block = sign_block(spec, state, block, proposer_index=0)
+    blob_sidecars = spec.get_blob_sidecars(signed_block, blobs, proofs)
+    blob_index = 0
+    blob_sidecar = blob_sidecars[blob_index]
+
+    yield "object", block.body
+    kzg_commitment_inclusion_proof = blob_sidecar.kzg_commitment_inclusion_proof
+    gindex = spec.get_generalized_index(spec.BeaconBlockBody, 'blob_kzg_commitments', blob_index)
+    yield "proof", {
+        "leaf": "0x" + blob_sidecar.kzg_commitment.hash_tree_root().hex(),
+        "leaf_index": gindex,
+        "branch": ['0x' + root.hex() for root in kzg_commitment_inclusion_proof]
+    }
+    assert verify_merkle_multiproof(
+        leaves=[blob_sidecar.kzg_commitment.hash_tree_root()],
+        proof=blob_sidecar.kzg_commitment_inclusion_proof,
+        indices=[gindex],
+        root=blob_sidecar.signed_block_header.message.body_root,
+    )
+
+
+@with_test_suite_name("BeaconBlockBody")
+@with_deneb_and_later
+@spec_state_test
+def test_blob_kzg_commitment_merkle_multiproof_single_leaf__basic(spec, state):
+    yield from _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state)
+
+@with_test_suite_name("BeaconBlockBody")
+@with_deneb_and_later
+@spec_state_test
+def test_blob_kzg_commitment_merkle_multiproof_multi_leaf__basic(spec, state):
+    yield from _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state)
+
+
+
 
 
 # Step 3:
