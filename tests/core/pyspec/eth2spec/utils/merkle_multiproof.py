@@ -243,4 +243,6 @@ def verify_merkle_multiproof(leaves: Sequence[Bytes32],
                              root: Root) -> bool:
     return calculate_multi_merkle_root(leaves, proof, indices) == root
 
-# Proof Gen Code here...  We need test vector inputs to `verify_merkle_multiproof()`!
+# todo: Implement the multiproof_generator function
+def multiproof_generator():
+    raise NotImplementedError("multiproof_generator function not implemented yet")

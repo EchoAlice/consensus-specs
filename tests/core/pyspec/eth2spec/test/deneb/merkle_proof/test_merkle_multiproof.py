@@ -21,6 +21,7 @@ from eth2spec.debug.random_value import (
     get_random_ssz_object,
 )
 
+# verify_merkle_multiproof passes with single leaf and proof
 def _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state, rng=None):
     opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=1)
     if rng is None:
@@ -57,12 +58,11 @@ def _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state, rng
         root=blob_sidecar.signed_block_header.message.body_root,
     )
 
-
-
-# Step 2:
-# Create a multiproof for two kzg commitments within the current block.
+# todo: Prove that multiple blobs are commited within a beacon block
 def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=None):
-    opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=1)
+    # todo:  change the number of blobs and commitments returned. 
+    #        Can we use the proofs generated here?  i don't think we can 
+    opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=2)
     if rng is None:
         block = build_empty_block_for_next_slot(spec, state)
     else:
@@ -90,6 +90,8 @@ def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=
         "leaf_index": gindex,
         "branch": ['0x' + root.hex() for root in kzg_commitment_inclusion_proof]
     }
+    
+    # todo: Get `verify_merkle_multiproof()` passing on tests created with our multiproofs.
     assert verify_merkle_multiproof(
         leaves=[blob_sidecar.kzg_commitment.hash_tree_root()],
         proof=blob_sidecar.kzg_commitment_inclusion_proof,
@@ -109,10 +111,3 @@ def test_blob_kzg_commitment_merkle_multiproof_single_leaf__basic(spec, state):
 @spec_state_test
 def test_blob_kzg_commitment_merkle_multiproof_multi_leaf__basic(spec, state):
     yield from _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state)
-
-
-
-
-
-# Step 3:
-# Test to see if `verify_merkle_multiproof()` works as expected...
