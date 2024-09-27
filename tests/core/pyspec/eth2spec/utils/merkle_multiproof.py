@@ -1,17 +1,15 @@
 from typing import (Sequence, Tuple, Union, Set)
 
 from eth2spec.utils.ssz.ssz_typing import (Bytes32, Container,  ByteList, uint64, List)
-from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName,)
-from remerkleable.tree import Root, merkle_hash as hash
+from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName, BeaconBlock)
+from remerkleable.tree import (Root, gindex_bit_iter, merkle_hash as hash)
 from remerkleable.byte_arrays import ByteVector as BaseBytes
 from remerkleable.complex import List as BaseList
 
 
-# define typ so that other code doesn't break        (reuse remerkleable types where you can)
-
-
-# consensus-specs/ssz/merkle-proofs.md  code here.  We want to expose  
-# `verify_merkle_multiproof()` within test_merkle_multiproof.py.
+# TODO: define types so that other code doesn't break        (reuse remerkleable types where you can)
+#       consensus-specs/ssz/merkle-proofs.md  code here.  We want to expose  
+#       `verify_merkle_multiproof()` within test_merkle_multiproof.py.
 
 # Helper functions
 def get_power_of_two_ceil(x: int) -> int:
@@ -243,6 +241,26 @@ def verify_merkle_multiproof(leaves: Sequence[Bytes32],
                              root: Root) -> bool:
     return calculate_multi_merkle_root(leaves, proof, indices) == root
 
-# todo: Implement the multiproof_generator function
-def multiproof_generator():
+# TODO: Implement the multiproof_generator function.
+def multiproof_generator(leaves: Sequence[Bytes32], gindexes: Sequence[GeneralizedIndex], node: Root) -> Sequence[Bytes32]:
+    print(f"Node: {node}")
+    
+    # Step 1: Calculate helper indices
+    helper_indices = get_helper_indices(gindexes)
+    print(f"Helper indices: {helper_indices}")
+    
+    # Step 2: Calculate hash tree root of items at said indices.  
+    bit_iter, _ = gindex_bit_iter(helper_indices[0])
+    for bit in bit_iter:
+        print(f"Bit: {bit}")
+        if bit:
+            # TODO: Debug why method isn't exposed.
+            node = node.get_right()
+            print(f"is bit: {bit}")
+        else:
+            node = node.get_left()
+            print(f"is not bit: {bit}")
+
+    print("Node at gindex: TODO")
     raise NotImplementedError("multiproof_generator function not implemented yet")
+
