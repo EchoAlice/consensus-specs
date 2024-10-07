@@ -1,8 +1,10 @@
 from typing import (Sequence, Tuple, Union, Set)
 
+from eth2spec.utils.hash_function import hash
 from eth2spec.utils.ssz.ssz_typing import (Bytes32, Container,  ByteList, uint64, List)
-from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName, BeaconBlock)
-from remerkleable.tree import (Root, gindex_bit_iter, merkle_hash as hash)
+from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName, BeaconBlock, floorlog2)
+from remerkleable.tree import (RootNode, Root, gindex_bit_iter)
+from remerkleable.tree import Node
 from remerkleable.byte_arrays import ByteVector as BaseBytes
 from remerkleable.complex import List as BaseList
 
@@ -226,41 +228,70 @@ def calculate_multi_merkle_root(leaves: Sequence[Bytes32],
         k = keys[pos]
         if k in objects and k ^ 1 in objects and k // 2 not in objects:
             objects[GeneralizedIndex(k // 2)] = hash(
-                objects[GeneralizedIndex((k | 1) ^ 1)],
+                objects[GeneralizedIndex((k | 1) ^ 1)] +
                 objects[GeneralizedIndex(k | 1)]
             )
             keys.append(GeneralizedIndex(k // 2))
             keys.append(GeneralizedIndex(k // 2))
             parent = GeneralizedIndex(k // 2)
         pos += 1
+     
     return objects[GeneralizedIndex(1)]
 
 def verify_merkle_multiproof(leaves: Sequence[Bytes32],
                              proof: Sequence[Bytes32],
                              indices: Sequence[GeneralizedIndex],
-                             root: Root) -> bool:
+                             root: RootNode) -> bool:
     return calculate_multi_merkle_root(leaves, proof, indices) == root
 
-# TODO: Implement the multiproof_generator function.
-def multiproof_generator(leaves: Sequence[Bytes32], gindexes: Sequence[GeneralizedIndex], node: Root) -> Sequence[Bytes32]:
-    print(f"Node: {node}")
-    
-    # Step 1: Calculate helper indices
+# TODO: 
+def create_merkle_multiproof(gindexes: Sequence[GeneralizedIndex], all_leaves: Sequence[Bytes32]):  # -> leaves, proof, root
+    print(f"Type of leaf in create_multiproof(): {type(all_leaves[0])}")
     helper_indices = get_helper_indices(gindexes)
-    print(f"Helper indices: {helper_indices}")
-    
-    # Step 2: Calculate hash tree root of items at said indices.  
-    bit_iter, _ = gindex_bit_iter(helper_indices[0])
-    for bit in bit_iter:
-        print(f"Bit: {bit}")
-        if bit:
-            # TODO: Debug why method isn't exposed.
-            node = node.get_right()
-            print(f"is bit: {bit}")
-        else:
-            node = node.get_left()
-            print(f"is not bit: {bit}")
+    tree = calc_merkle_tree_from_leaves(all_leaves)
 
-    print("Node at gindex: TODO")
     raise NotImplementedError("multiproof_generator function not implemented yet")
 
+ZERO_BYTES32 = b'\x00' * 32
+zerohashes = [ZERO_BYTES32]
+for layer in range(1, 100):
+    zerohashes.append(hash(zerohashes[layer - 1] + zerohashes[layer - 1]))
+
+# TODO: Why are values being recognized as `ints`, not `bytes`?
+def calc_merkle_tree_from_leaves(values: Sequence[Bytes32]):
+    print(f"type of leaf in calc_merkle_tree: {type(values[0])}")
+    depth = floorlog2(len(values))
+    values = list(values)
+    tree = [values[::]]
+    print(f"tree before hashing: {tree}")
+    print("\n")
+
+    # TODO: Convert `int` values to `bytes` when hashing
+    for d in range(depth):
+        # Original
+        # ----------------------------------------------------------
+        # if len(values) % 2 == 1:
+        #     values.append(zerohashes[d])
+        # values = [hash(values[i] + values[i + 1]) for i in range(0, len(values), 2)]     #hash or spec_hash?
+        # tree.append(values[::])
+        # ----------------------------------------------------------
+        
+        # Debugging.   Go back to original code once i figure out why individual leaves are seen as `ints`, not `bytes`
+        #  ----------------------------------------------------------
+        print(f"depth: {d}")
+        if len(values) % 2 == 1:
+            values.append(zerohashes[d])
+        parent_values = []
+        for i in range(0, len(values), 2):
+            if isinstance(values[i], int):
+                values[i] = values[i].to_bytes(32, 'big')
+                # print("convert left")
+            if isinstance(values[i+1], int):
+                values[i+1] = values[i+1].to_bytes(32, 'big')
+                # print("convert right")
+            hashed_value = hash(values[i] + values[i + 1])
+            parent_values.append(hashed_value) 
+        values = parent_values
+        tree.append(values[::])
+        # ----------------------------------------------------------
+    return tree
