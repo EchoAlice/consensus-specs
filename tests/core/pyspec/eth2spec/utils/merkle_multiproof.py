@@ -245,53 +245,43 @@ def verify_merkle_multiproof(leaves: Sequence[Bytes32],
     return calculate_multi_merkle_root(leaves, proof, indices) == root
 
 # TODO: 
-def create_merkle_multiproof(gindexes: Sequence[GeneralizedIndex], all_leaves: Sequence[Bytes32]):  # -> leaves, proof, root
-    print(f"Type of leaf in create_multiproof(): {type(all_leaves[0])}")
-    helper_indices = get_helper_indices(gindexes)
+def create_merkle_multiproof(gindexes: Sequence[GeneralizedIndex], all_leaves: Sequence[Bytes32]):  # -> gindex leaves, proof, root
     tree = calc_merkle_tree_from_leaves(all_leaves)
+    leaves_to_prove, proof = calc_proof_from_tree(gindexes, tree)
 
-    raise NotImplementedError("multiproof_generator function not implemented yet")
-
+# TODO: Understand why `zerohashes` is necessary.
 ZERO_BYTES32 = b'\x00' * 32
 zerohashes = [ZERO_BYTES32]
 for layer in range(1, 100):
     zerohashes.append(hash(zerohashes[layer - 1] + zerohashes[layer - 1]))
 
-# TODO: Why are values being recognized as `ints`, not `bytes`?
 def calc_merkle_tree_from_leaves(values: Sequence[Bytes32]):
-    print(f"type of leaf in calc_merkle_tree: {type(values[0])}")
     depth = floorlog2(len(values))
     values = list(values)
     tree = [values[::]]
-    print(f"tree before hashing: {tree}")
-    print("\n")
-
-    # TODO: Convert `int` values to `bytes` when hashing
-    for d in range(depth):
-        # Original
-        # ----------------------------------------------------------
-        # if len(values) % 2 == 1:
-        #     values.append(zerohashes[d])
-        # values = [hash(values[i] + values[i + 1]) for i in range(0, len(values), 2)]     #hash or spec_hash?
-        # tree.append(values[::])
-        # ----------------------------------------------------------
-        
-        # Debugging.   Go back to original code once i figure out why individual leaves are seen as `ints`, not `bytes`
-        #  ----------------------------------------------------------
-        print(f"depth: {d}")
+    
+    # TODO: Go back to original code once i figure out why individual leaves are seen as `ints`, not `bytes`.
+    for d in range(depth + 1):
+        parent_values = []
         if len(values) % 2 == 1:
             values.append(zerohashes[d])
-        parent_values = []
         for i in range(0, len(values), 2):
             if isinstance(values[i], int):
                 values[i] = values[i].to_bytes(32, 'big')
-                # print("convert left")
             if isinstance(values[i+1], int):
                 values[i+1] = values[i+1].to_bytes(32, 'big')
-                # print("convert right")
             hashed_value = hash(values[i] + values[i + 1])
             parent_values.append(hashed_value) 
         values = parent_values
         tree.append(values[::])
-        # ----------------------------------------------------------
     return tree
+
+# TODO:
+def calc_proof_from_tree(gindexes: Sequence[GeneralizedIndex], tree: list[list[Bytes32]]):   #    return leaves_to_prove, proof
+    helper_indices = get_helper_indices(gindexes)
+    
+    # Debugging:
+    for l in range(len(tree)):
+        print(f"layer {l}: {tree[l]}")
+    
+    raise NotImplementedError("calc_proof_from_tree is not implemented yet")
