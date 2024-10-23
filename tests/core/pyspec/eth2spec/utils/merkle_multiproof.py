@@ -1,10 +1,9 @@
 from typing import (Sequence, Tuple, Union, Set)
+from math import log2
 
 from eth2spec.utils.hash_function import hash
 from eth2spec.utils.ssz.ssz_typing import (Bytes32, Container,  ByteList, uint64, List)
-from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName, BeaconBlock, floorlog2)
-from remerkleable.tree import (RootNode, Root, gindex_bit_iter)
-from remerkleable.tree import Node
+from eth2spec.deneb.mainnet import (GeneralizedIndex, SSZVariableName)
 from remerkleable.byte_arrays import ByteVector as BaseBytes
 from remerkleable.complex import List as BaseList
 
@@ -199,7 +198,7 @@ def get_helper_indices(indices: Sequence[GeneralizedIndex]) -> Sequence[Generali
 
     return sorted(all_helper_indices.difference(all_path_indices), reverse=True)
 
-def calculate_merkle_root(leaf: Bytes32, proof: Sequence[Bytes32], index: GeneralizedIndex) -> Root:
+def calculate_merkle_root(leaf: Bytes32, proof: Sequence[Bytes32], index: GeneralizedIndex) -> Bytes32:
     assert len(proof) == get_generalized_index_length(index)
     for i, h in enumerate(proof):
         if get_generalized_index_bit(index, i):
@@ -208,12 +207,12 @@ def calculate_merkle_root(leaf: Bytes32, proof: Sequence[Bytes32], index: Genera
             leaf = hash(leaf + h)
     return leaf
 
-def verify_merkle_proof(leaf: Bytes32, proof: Sequence[Bytes32], index: GeneralizedIndex, root: Root) -> bool:
+def verify_merkle_proof(leaf: Bytes32, proof: Sequence[Bytes32], index: GeneralizedIndex, root: Bytes32) -> bool:
     return calculate_merkle_root(leaf, proof, index) == root
 
 def calculate_multi_merkle_root(leaves: Sequence[Bytes32],
                                 proof: Sequence[Bytes32],
-                                indices: Sequence[GeneralizedIndex]) -> Root:
+                                indices: Sequence[GeneralizedIndex]) -> Bytes32:
     assert len(leaves) == len(indices)
     helper_indices = get_helper_indices(indices)
     assert len(proof) == len(helper_indices)  
@@ -235,33 +234,36 @@ def calculate_multi_merkle_root(leaves: Sequence[Bytes32],
             keys.append(GeneralizedIndex(k // 2))
             parent = GeneralizedIndex(k // 2)
         pos += 1
-     
-    return objects[GeneralizedIndex(1)]
+    
+    return bytes(objects[GeneralizedIndex(1)])
 
 def verify_merkle_multiproof(leaves: Sequence[Bytes32],
                              proof: Sequence[Bytes32],
                              indices: Sequence[GeneralizedIndex],
-                             root: RootNode) -> bool:
-    return calculate_multi_merkle_root(leaves, proof, indices) == root
+                             root: Bytes32) -> bool:
+    return calculate_multi_merkle_root(leaves, proof, indices)
 
-# TODO: 
-def create_merkle_multiproof(gindexes: Sequence[GeneralizedIndex], all_leaves: Sequence[Bytes32]):  # -> gindex leaves, proof, root
+# TODO: Create more tests
+def create_merkle_multiproof(gindexes: Sequence[GeneralizedIndex], all_leaves: Sequence[Bytes32]):  
+    helper_indices = get_helper_indices(gindexes)
     tree = calc_merkle_tree_from_leaves(all_leaves)
-    leaves_to_prove, proof = calc_proof_from_tree(gindexes, tree)
+    proof = calc_proof_from_tree(helper_indices, tree)
+    
+    # TODO: Should this return gindex leaves, proof, and root?
+    return proof
 
-# TODO: Understand why `zerohashes` is necessary.
 ZERO_BYTES32 = b'\x00' * 32
 zerohashes = [ZERO_BYTES32]
 for layer in range(1, 100):
     zerohashes.append(hash(zerohashes[layer - 1] + zerohashes[layer - 1]))
 
 def calc_merkle_tree_from_leaves(values: Sequence[Bytes32]):
-    depth = floorlog2(len(values))
+    leaf_layer_len = get_power_of_two_ceil(len(values))
+    layer_count = int(log2(leaf_layer_len))
     values = list(values)
     tree = [values[::]]
-    
-    # TODO: Go back to original code once i figure out why individual leaves are seen as `ints`, not `bytes`.
-    for d in range(depth + 1):
+
+    for d in range(layer_count):
         parent_values = []
         if len(values) % 2 == 1:
             values.append(zerohashes[d])
@@ -271,17 +273,28 @@ def calc_merkle_tree_from_leaves(values: Sequence[Bytes32]):
             if isinstance(values[i+1], int):
                 values[i+1] = values[i+1].to_bytes(32, 'big')
             hashed_value = hash(values[i] + values[i + 1])
-            parent_values.append(hashed_value) 
+            parent_values.append(hashed_value)
         values = parent_values
-        tree.append(values[::])
+        tree.insert(0, values[::])
     return tree
 
-# TODO:
-def calc_proof_from_tree(gindexes: Sequence[GeneralizedIndex], tree: list[list[Bytes32]]):   #    return leaves_to_prove, proof
-    helper_indices = get_helper_indices(gindexes)
-    
-    # Debugging:
-    for l in range(len(tree)):
-        print(f"layer {l}: {tree[l]}")
-    
-    raise NotImplementedError("calc_proof_from_tree is not implemented yet")
+def calc_proof_from_tree(helper_indices: Sequence[GeneralizedIndex], tree: list[list[Bytes32]]):
+    # For debugging index out of range error when computing multiproof for kzg commitments
+    for i in range(len(tree)):
+        print(f"length of tree[{i}]: {len(tree[i])}")
+
+    proof = []
+    for i in range(len(helper_indices)):
+        binary = int_to_bits(helper_indices[i])
+        path = binary[1:]
+        depth = len(path) 
+        first_gindex_in_layer = 2**depth
+        index = helper_indices[i] - (first_gindex_in_layer)
+        proof.append(tree[depth][index])
+
+
+
+    return proof
+
+def int_to_bits(n: int) -> list[int]:
+    return [int(bit) for bit in bin(n)[2:]]

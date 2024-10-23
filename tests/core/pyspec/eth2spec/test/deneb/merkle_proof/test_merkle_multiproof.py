@@ -1,5 +1,4 @@
-import eth2spec.deneb.mainnet
-
+from eth2spec.utils.hash_function import hash   
 from eth2spec.utils.ssz.ssz_impl import serialize
 from eth2spec.utils.merkle_multiproof import (verify_merkle_multiproof, create_merkle_multiproof)
 from eth2spec.test.context import (
@@ -22,7 +21,7 @@ from eth2spec.debug.random_value import (
     get_random_ssz_object,
 )
 
-# verify_merkle_multiproof passes with single leaf and proof
+# Passes with single leafed input
 def _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state, rng=None):
     opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=1)
     if rng is None:
@@ -59,7 +58,7 @@ def _run_blob_kzg_commitment_merkle_multiproof_test_single_leaf(spec, state, rng
         root=blob_sidecar.signed_block_header.message.body_root,
     )
 
-# TODO: Test `verify_merkle_multiproof()`
+# TODO:
 def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=None):
     opaque_tx, blobs, blob_kzg_commitments, proofs = get_sample_opaque_tx(spec, blob_count=3)
     if rng is None:
@@ -77,6 +76,7 @@ def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=
     block.body.execution_payload.transactions = [opaque_tx]
     block.body.execution_payload.block_hash = compute_el_block_hash(spec, block.body.execution_payload, state)
     signed_block = sign_block(spec, state, block, proposer_index=0)
+    blob_sidecars = spec.get_blob_sidecars(signed_block, blobs, proofs)
     
     gindex_blob_commit0 = spec.get_generalized_index(spec.BeaconBlockBody, 'blob_kzg_commitments', 0)
     gindex_blob_commit2 = spec.get_generalized_index(spec.BeaconBlockBody, 'blob_kzg_commitments', 2)
@@ -84,17 +84,39 @@ def _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state, rng=
     gindexes = [gindex_blob_commit0, gindex_blob_commit2] 
 
     all_leaves = serialize(block.body)
-    # TODO: Implement `create_merkle_multiproof()`
-    blob_commitments_multi_proof = create_merkle_multiproof(gindexes, all_leaves)
+    # TODO: Debug index out of range error
+    blob_commitments_multi_proof = create_merkle_multiproof(gindexes, all_leaves)   
 
-    # TODO: Get `verify_merkle_multiproof()` passing on tests created with our multiproofs.
-    assert verify_merkle_multiproof(
-        leaves_to_prove,
+    result = verify_merkle_multiproof(
+        leaves = leaves_to_prove,
         proof=blob_commitments_multi_proof,
         indices=gindexes,
-        root=signed_block.message.body_root,  # root=blob_sidecar.signed_block_header.message.body_root   for consistancy
+        root= blob_sidecars[0].signed_block_header.message.body_root
     )
+    assert result
 
+# `create_merkle_multiproof` and `verify_merkle_mutliproof` pass on example from multiproof docs
+def _run_merkle_multiproof_test_docs_example():
+    all_leaves = [] 
+    for i in range(0, 8):
+        all_leaves.append(i.to_bytes(32, 'big'))
+    h01 = hash(all_leaves[0]+all_leaves[1])
+    h23 = hash(all_leaves[2]+all_leaves[3])
+    h45 = hash(all_leaves[4]+all_leaves[5])
+    h67 = hash(all_leaves[6]+all_leaves[7])
+    hh0123 = hash(h01 + h23)    
+    hh4567 = hash(h45 + h67)
+    real_root = hash(hh0123 + hh4567)
+
+    gindexes = [8,9,14]
+    proof = create_merkle_multiproof(gindexes, all_leaves)   
+    leaves_to_prove = [all_leaves[0], all_leaves[1], all_leaves[6]]
+    
+    assert verify_merkle_multiproof(leaves_to_prove, 
+        proof, 
+        gindexes, 
+        real_root
+    )
 
 @with_test_suite_name("BeaconBlockBody")
 @with_deneb_and_later
@@ -107,3 +129,6 @@ def test_blob_kzg_commitment_merkle_multiproof_single_leaf__basic(spec, state):
 @spec_state_test
 def test_blob_kzg_commitment_merkle_multiproof_multi_leaf__basic(spec, state):
     yield from _run_blob_kzg_commitment_merkle_multiproof_test_multi_leaf(spec, state)
+
+def test_merkle_multiproof_generator():
+    _run_merkle_multiproof_test_docs_example()
